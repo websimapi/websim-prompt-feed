@@ -5,31 +5,40 @@ async function getUserInterests(currentUser) {
 
     // 1. User's own projects
     try {
-        const userProjects = await websim.getUserProjects(currentUser.username, { first: 10, posted: true, sort_by: 'updated_at' });
-        userProjects.projects.data.forEach(p => {
-            if (p.project.title) interests.push(p.project.title);
-            if (p.site && p.site.prompt && p.site.prompt.text) {
-                interests.push(p.site.prompt.text);
-            }
-        });
+        const userProjectsResponse = await fetch(`/api/v1/users/${currentUser.username}/projects?first=10&posted=true&sort_by=updated_at`);
+        if (userProjectsResponse.ok) {
+            const userProjects = await userProjectsResponse.json();
+            userProjects.projects.data.forEach(p => {
+                if (p.project.title) interests.push(p.project.title);
+                if (p.site && p.site.prompt && p.site.prompt.text) {
+                    interests.push(p.site.prompt.text);
+                }
+            });
+        }
     } catch (e) {
         console.error("Couldn't fetch user projects:", e);
     }
 
     // 2. Projects from followed users
     try {
-        const followingResponse = await websim.getUserFollowing(currentUser.username, { first: 5 });
-        const followedUsers = followingResponse.following.data.map(f => f.follow.user);
+        const followingResponseRaw = await fetch(`/api/v1/users/${currentUser.username}/following?first=5`);
+        if (followingResponseRaw.ok) {
+            const followingResponse = await followingResponseRaw.json();
+            const followedUsers = followingResponse.following.data.map(f => f.follow.user);
 
-        for (const followedUser of followedUsers) {
-            if (followedUser && followedUser.username) {
-                const followedProjects = await websim.getUserProjects(followedUser.username, { first: 5, posted: true, sort_by: 'updated_at' });
-                followedProjects.projects.data.forEach(p => {
-                    if (p.project.title) interests.push(p.project.title);
-                    if (p.site && p.site.prompt && p.site.prompt.text) {
-                        interests.push(p.site.prompt.text);
+            for (const followedUser of followedUsers) {
+                if (followedUser && followedUser.username) {
+                    const followedProjectsResponse = await fetch(`/api/v1/users/${followedUser.username}/projects?first=5&posted=true&sort_by=updated_at`);
+                    if (followedProjectsResponse.ok) {
+                        const followedProjects = await followedProjectsResponse.json();
+                        followedProjects.projects.data.forEach(p => {
+                            if (p.project.title) interests.push(p.project.title);
+                            if (p.site && p.site.prompt && p.site.prompt.text) {
+                                interests.push(p.site.prompt.text);
+                            }
+                        });
                     }
-                });
+                }
             }
         }
     } catch (e) {
@@ -38,13 +47,16 @@ async function getUserInterests(currentUser) {
 
     // 3. User's liked projects
     try {
-        const likedResponse = await websim.getUserLikes(currentUser.username, { first: 10 });
-        likedResponse.likes.data.forEach(l => {
-            if (l.project && l.project.title) interests.push(l.project.title);
-            if (l.site && l.site.prompt && l.site.prompt.text) {
-                interests.push(l.site.prompt.text);
-            }
-        });
+        const likedResponseRaw = await fetch(`/api/v1/users/${currentUser.username}/likes?first=10`);
+        if (likedResponseRaw.ok) {
+            const likedResponse = await likedResponseRaw.json();
+            likedResponse.likes.data.forEach(l => {
+                if (l.project && l.project.title) interests.push(l.project.title);
+                if (l.site && l.site.prompt && l.site.prompt.text) {
+                    interests.push(l.site.prompt.text);
+                }
+            });
+        }
     } catch(e) {
         console.error("Couldn't fetch user likes:", e);
     }
