@@ -1,29 +1,52 @@
 const feedContainer = document.getElementById('feed-container');
 const loadingIndicator = document.getElementById('loading');
 
-export function createFeedItemElement(user) {
-    const item = document.createElement('div');
-    item.className = 'feed-item';
+export function createFeedItemElement(user, project) {
+    const itemContent = document.createElement('div');
+    itemContent.className = 'feed-item-content';
+
+    let containerElement;
+
+    if (project) {
+        const linkWrapper = document.createElement('a');
+        linkWrapper.href = `https://websim.com/p/${project.id}`;
+        linkWrapper.target = '_blank';
+        linkWrapper.className = 'feed-item';
+        linkWrapper.appendChild(itemContent);
+        containerElement = linkWrapper;
+    } else {
+        containerElement = document.createElement('div');
+        containerElement.className = 'feed-item';
+        containerElement.appendChild(itemContent);
+    }
     
     const promptInfo = document.createElement('div');
     promptInfo.className = 'prompt-info';
     promptInfo.textContent = 'Generating...';
-    item.appendChild(promptInfo);
+    itemContent.appendChild(promptInfo);
     
     if (user) {
         const userInfo = document.createElement('div');
         userInfo.className = 'user-info';
+        
+        const userProfileLink = document.createElement('a');
+        userProfileLink.href = `https://websim.com/@${user.username}`;
+        userProfileLink.target = '_blank';
+        userProfileLink.className = 'user-profile-link';
+
         const userAvatar = document.createElement('img');
         userAvatar.src = user.avatar_url || `https://images.websim.com/avatar/${user.username}`;
         const userName = document.createElement('span');
         userName.textContent = `@${user.username}`;
-        userInfo.appendChild(userAvatar);
-        userInfo.appendChild(userName);
-        item.appendChild(userInfo);
+        
+        userProfileLink.appendChild(userAvatar);
+        userProfileLink.appendChild(userName);
+        userInfo.appendChild(userProfileLink);
+        itemContent.appendChild(userInfo);
     }
 
-    feedContainer.appendChild(item);
-    return item;
+    feedContainer.appendChild(containerElement);
+    return itemContent;
 }
 
 export function updateFeedItem(item, prompt, imageUrl) {
@@ -58,4 +81,3 @@ export function showFinalError(message) {
     if (spinner) spinner.style.display = 'none';
     loadingIndicator.classList.remove('hidden');
 }
-
