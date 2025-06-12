@@ -28,7 +28,7 @@ async function fetchAndQueueItems() {
         const newItems = [];
         newItems.push(...prompts.map(p => ({ type: 'generated', data: p })));
         
-        const validProjects = followedProjects.filter(p => p.site && p.site.id && p.project_revision && p.project_revision.current_screenshot_url);
+        const validProjects = followedProjects.filter(p => p.site && p.site.prompt && p.site.prompt.text);
         newItems.push(...validProjects.map(p => ({ type: 'project', data: p })));
 
         if (newItems.length === 0) {
@@ -75,10 +75,10 @@ async function createAndAppendItem() {
         
         const itemElement = createFeedItemElement(author, project);
         
-        const title = projectData.project.title || (projectData.site.prompt ? projectData.site.prompt.text : 'Untitled Project');
-        const imageUrl = projectData.project_revision.current_screenshot_url;
+        const prompt = projectData.site.prompt.text;
+        const imageUrl = await generateImage(prompt);
         
-        updateFeedItem(itemElement, title, imageUrl);
+        updateFeedItem(itemElement, prompt, imageUrl);
     }
 }
 
