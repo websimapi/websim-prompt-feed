@@ -130,90 +130,75 @@
         let promptsQueue = [];
         let user = null;
 
-        async function getUserInterests(currentUser) {
-            if (!currentUser) return 'The user is anonymous. Generate prompts based on generally popular, trending, and visually spectacular creative themes.';
-
-            let interests = [];
-
-            // 1. User's own projects
-            try {
-                const userProjects = await websim.getUserProjects(currentUser.username, { first: 10, posted: true, sort_by: 'updated_at' });
-                userProjects.projects.data.forEach(p => {
-                    if (p.project.title) interests.push(p.project.title);
-                    if (p.site && p.site.prompt && p.site.prompt.text) {
-                        interests.push(p.site.prompt.text);
-                    }
-                });
-            } catch (e) {
-                console.error("Couldn't fetch user projects:", e);
-            }
-
-            // 2. Projects from followed users
-            try {
-                const followingResponse = await websim.getUserFollowing(currentUser.username, { first: 5 });
-                const followedUsers = followingResponse.following.data.map(f => f.follow.user);
-
-                for (const followedUser of followedUsers) {
-                    if (followedUser && followedUser.username) {
-                        const followedProjects = await websim.getUserProjects(followedUser.username, { first: 5, posted: true, sort_by: 'updated_at' });
-                        followedProjects.projects.data.forEach(p => {
-                            if (p.project.title) interests.push(p.project.title);
-                            if (p.site && p.site.prompt && p.site.prompt.text) {
-                                interests.push(p.site.prompt.text);
-                            }
-                        });
-                    }
-                }
-            } catch (e) {
-                console.error("Couldn't fetch followed users' projects:", e);
-            }
-
-            // 3. User's liked projects
-            try {
-                const likedResponse = await websim.getUserLikes(currentUser.username, { first: 10 });
-                likedResponse.likes.data.forEach(l => {
-                    if (l.project && l.project.title) interests.push(l.project.title);
-                    if (l.site && l.site.prompt && l.site.prompt.text) {
-                        interests.push(l.site.prompt.text);
-                    }
-                });
-            } catch(e) {
-                console.error("Couldn't fetch user likes:", e);
-            }
-
-            if (interests.length > 0) {
-                try {
-                    const uniqueInterests = [...new Set(interests)].join(', ');
-                    const completion = await websim.chat.completions.create({
-                        messages: [{
-                            role: 'system',
-                            content: 'You are an assistant that summarizes a list of topics and prompts into a concise list of key themes and interests. Extract the core concepts. Respond with a comma-separated list of no more than 10-15 key themes.'
-                        }, {
-                            role: 'user',
-                            content: `Here is a list of project titles and prompts from a user and people they follow: ${uniqueInterests}`
-                        }],
-                    });
-                    return `The user has shown interest in the following topics: ${completion.content}.`;
-                } catch(e) {
-                    console.error("Error summarizing interests, using raw data:", e);
-                    return `The user has shown interest in: ${[...new Set(interests)].slice(0, 20).join(', ')}.`;
-                }
-            }
-
-            return `The user's username is '${currentUser.username}' and their description is '${currentUser.description}'. They haven't created, liked, or followed anyone with public projects yet, so generate prompts based on generally popular and trending creative themes.`;
-        }
-
         async function fetchPrompts(currentUser, count) {
             console.log('Fetching new personalized prompts...');
+            let contextPrompt = 'The user is anonymous. Generate prompts based on generally popular, trending, and visually spectacular creative themes.';
+            
+            if (currentUser) {
+                let interests = [];
+
+                // 1. User's own projects (prompt history)
+                try {
+                    const userProjects = await websim.getUserProjects(currentUser.username, { first: 10, posted: true, sort_by: 'updated_at' });
+                    userProjects.projects.data.forEach(p => {
+                        if (p.project.title) interests.push(p.project.title);
+                        if (p.site && p.site.prompt && p.site.prompt.text) {
+                            interests.push(p.site.prompt.text.trim());
+                        }
+                    });
+                } catch (e) { console.error("Couldn't fetch user projects:", e); }
+
+                // 2. Projects from followed users (prompt history)
+                try {
+                    const followingResponse = await websim.getUserFollowing(currentUser.username, { first: 5 });
+                    const followedUsers = followingResponse.following.data.map(f => f.follow.user);
+
+                    for (const followedUser of followedUsers) {
+                        if (followedUser && followedUser.username) {
+                            const followedProjects = await websim.getUserProjects(followedUser.username, { first: 5, posted: true, sort_by: 'updated_at' });
+                            followedProjects.projects.data.forEach(p => {
+                                if (p.project.title) interests.push(p.project.title);
+                                if (p.site && p.site.prompt && p.site.prompt.text) {
+                                    interests.push(p.site.prompt.text.trim());
+                                }
+                            });
+                        }
+                    }
+                } catch (e) { console.error("Couldn't fetch followed users' projects:", e); }
+
+                // 3. User's liked projects (prompt history)
+                try {
+                    const likedResponse = await websim.getUserLikes(currentUser.username, { first: 10 });
+                    likedResponse.likes.data.forEach(l => {
+                        if (l.project && l.project.title) interests.push(l.project.title);
+                        if (l.site && l.site.prompt && l.site.prompt.text) {
+                            interests.push(l.site.prompt.text.trim());
+                        }
+                    });
+                } catch(e) { console.error("Couldn't fetch user likes:", e); }
+
+                if (interests.length > 0) {
+                    const uniqueInterests = [...new Set(interests.filter(i => i))].slice(0, 30).join('; ');
+                    contextPrompt = `The user's prompt history (from their projects, follows, and likes) includes the following topics and prompts: "${uniqueInterests}". Use this as direct inspiration for new image prompts.`;
+                } else {
+                    contextPrompt = `The user's username is '${currentUser.username}' and their description is '${currentUser.description}'. They haven't created, liked, or followed anyone with public projects yet, so generate prompts based on generally popular and trending creative themes.`;
+                }
+            }
+
             try {
-                const userInterestSummary = await getUserInterests(currentUser);
-                
                 const completion = await websim.chat.completions.create({
                     messages: [{
                         role: 'system',
-                        content: `You are a creative prompt generator for an AI image model. Your goal is to create a personalized, engaging, and endless vertical social media feed for a user.
-                        ${userInterestSummary}
-                        Based on this, generate ${count} unique and diverse prompts for visually stunning images. The prompts should be imaginative, ranging from fantasy landscapes to futuristic cityscapes, abstract art, and surreal concepts, while being tailored to the user's inferred interests. Also, introduce some related but new concepts to keep the feed fresh.
+                        content: `You are a creative prompt generator for an AI image model. Your goal is to create a personalized, engaging, and endless vertical social media feed.
+                        
+                        ${contextPrompt}
+                        
+                        Based on this information, generate ${count} unique and diverse prompts for visually stunning images.
+                        - Analyze the provided prompt history for recurring themes, subjects, and styles (e.g., "cyberpunk", "fantasy", "photorealistic", "abstract").
+                        - Generate new prompts that are similar to or remixes of the user's interests.
+                        - Also, introduce some related but new concepts to keep the feed fresh and interesting. For example, if they like "fantasy castles", suggest "enchanted forest villages" or "floating islands with wizard towers".
+                        - The prompts should be imaginative and detailed.
+                        
                         Respond with a JSON object following this schema: { "prompts": ["prompt1", "prompt2", ...] }`,
                     }, {
                         role: 'user',
