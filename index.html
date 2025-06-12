@@ -130,79 +130,151 @@
         let promptsQueue = [];
         let user = null;
 
-        async function fetchPrompts(currentUser, count) {
-            console.log('Fetching new personalized prompts...');
-            let contextPrompt = 'The user is anonymous. Generate prompts based on generally popular, trending, and visually spectacular creative themes.';
-            
-            if (currentUser) {
-                let interests = [];
+        async function getUserInterests(currentUser) {
+            if (!currentUser) return 'The user is anonymous. Generate prompts based on generally popular, trending, and visually spectacular creative themes.';
 
-                // 1. User's own projects (prompt history)
-                try {
-                    const userProjects = await websim.getUserProjects(currentUser.username, { first: 10, posted: true, sort_by: 'updated_at' });
-                    userProjects.projects.data.forEach(p => {
-                        if (p.project.title) interests.push(p.project.title);
-                        if (p.site && p.site.prompt && p.site.prompt.text) {
-                            interests.push(p.site.prompt.text.trim());
-                        }
-                    });
-                } catch (e) { console.error("Couldn't fetch user projects:", e); }
+            let userPrompts = [];
+            let followedPrompts = [];
+            let likedPrompts = [];
 
-                // 2. Projects from followed users (prompt history)
-                try {
-                    const followingResponse = await websim.getUserFollowing(currentUser.username, { first: 5 });
-                    const followedUsers = followingResponse.following.data.map(f => f.follow.user);
-
-                    for (const followedUser of followedUsers) {
-                        if (followedUser && followedUser.username) {
-                            const followedProjects = await websim.getUserProjects(followedUser.username, { first: 5, posted: true, sort_by: 'updated_at' });
-                            followedProjects.projects.data.forEach(p => {
-                                if (p.project.title) interests.push(p.project.title);
-                                if (p.site && p.site.prompt && p.site.prompt.text) {
-                                    interests.push(p.site.prompt.text.trim());
-                                }
-                            });
+            // 1. User's own projects - higher weight
+            try {
+                const userProjects = await websim.getUserProjects(currentUser.username, { first: 20, posted: true, sort_by: 'updated_at' });
+                userProjects.projects.data.forEach(p => {
+                    if (p.site && p.site.prompt) {
+                        if (p.site.prompt.text) {
+                            userPrompts.push(p.site.prompt.text);
                         }
                     }
-                } catch (e) { console.error("Couldn't fetch followed users' projects:", e); }
+                    if (p.project.title) userPrompts.push(p.project.title);
+                    if (p.project.description) userPrompts.push(p.project.description);
+                });
+            } catch (e) {
+                console.error("Couldn't fetch user projects:", e);
+            }
 
-                // 3. User's liked projects (prompt history)
-                try {
-                    const likedResponse = await websim.getUserLikes(currentUser.username, { first: 10 });
-                    likedResponse.likes.data.forEach(l => {
-                        if (l.project && l.project.title) interests.push(l.project.title);
-                        if (l.site && l.site.prompt && l.site.prompt.text) {
-                            interests.push(l.site.prompt.text.trim());
+            // 2. Projects from followed users - medium weight
+            try {
+                const followingResponse = await websim.getUserFollowing(currentUser.username, { first: 10 });
+                const followedUsers = followingResponse.following.data.map(f => f.follow.user);
+
+                for (const followedUser of followedUsers) {
+                    if (followedUser && followedUser.username) {
+                        const followedProjects = await websim.getUserProjects(followedUser.username, { first: 10, posted: true, sort_by: 'updated_at' });
+                        followedProjects.projects.data.forEach(p => {
+                            if (p.site && p.site.prompt) {
+                                if (p.site.prompt.text) {
+                                    followedPrompts.push(p.site.prompt.text);
+                                }
+                            }
+                            if (p.project.title) followedPrompts.push(p.project.title);
+                            if (p.project.description) followedPrompts.push(p.project.description);
+                        });
+                    }
+                }
+            } catch (e) {
+                console.error("Couldn't fetch followed users' projects:", e);
+            }
+
+            // 3. User's liked projects - lower weight
+            try {
+                const likedResponse = await websim.getUserLikes(currentUser.username, { first: 15 });
+                likedResponse.likes.data.forEach(l => {
+                    if (l.site && l.site.prompt) {
+                        if (l.site.prompt.text) {
+                            likedPrompts.push(l.site.prompt.text);
                         }
-                    });
-                } catch(e) { console.error("Couldn't fetch user likes:", e); }
+                    }
+                    if (l.project && l.project.title) likedPrompts.push(l.project.title);
+                    if (l.project && l.project.description) likedPrompts.push(l.project.description);
+                });
+            } catch(e) {
+                console.error("Couldn't fetch user likes:", e);
+            }
 
-                if (interests.length > 0) {
-                    const uniqueInterests = [...new Set(interests.filter(i => i))].slice(0, 30).join('; ');
-                    contextPrompt = `The user's prompt history (from their projects, follows, and likes) includes the following topics and prompts: "${uniqueInterests}". Use this as direct inspiration for new image prompts.`;
-                } else {
-                    contextPrompt = `The user's username is '${currentUser.username}' and their description is '${currentUser.description}'. They haven't created, liked, or followed anyone with public projects yet, so generate prompts based on generally popular and trending creative themes.`;
+            // Analyze and categorize the collected prompts
+            if (userPrompts.length > 0 || followedPrompts.length > 0 || likedPrompts.length > 0) {
+                try {
+                    const allPrompts = {
+                        user_own: [...new Set(userPrompts)].slice(0, 15),
+                        followed_users: [...new Set(followedPrompts)].slice(0, 10), 
+                        liked_content: [...new Set(likedPrompts)].slice(0, 8)
+                    };
+
+                    const completion = await websim.chat.completions.create({
+                        messages: [{
+                            role: 'system',
+                            content: `You are an AI assistant that analyzes user content preferences to extract visual themes, artistic styles, and subject matter preferences. 
+
+Analyze the provided prompts and content from three sources with different weights:
+1. USER'S OWN PROJECTS (highest weight) - Their direct creative interests
+2. FOLLOWED USERS' PROJECTS (medium weight) - Influences and aspirations  
+3. LIKED CONTENT (lower weight) - Passive interests
+
+Extract and categorize:
+- Visual themes (cyberpunk, fantasy, nature, abstract, etc.)
+- Artistic styles (photorealistic, cartoon, oil painting, digital art, etc.)
+- Subject preferences (landscapes, portraits, architecture, animals, etc.)
+- Color palettes and moods (dark/bright, warm/cool, etc.)
+- Technical elements (lighting, composition, effects)
+
+Respond with a detailed analysis that prioritizes the user's own creative patterns while incorporating influences from their social connections.`
+                        }, {
+                            role: 'user',
+                            content: `Analyze these prompts and content:
+
+USER'S OWN PROJECTS (highest priority):
+${allPrompts.user_own.join('\n')}
+
+FOLLOWED USERS' PROJECTS (medium priority):
+${allPrompts.followed_users.join('\n')}
+
+LIKED CONTENT (lower priority):
+${allPrompts.liked_content.join('\n')}`
+                        }],
+                    });
+                    
+                    return `PERSONALIZED FEED ANALYSIS: ${completion.content}
+
+USER PROFILE: Username '@${currentUser.username}', Bio: '${currentUser.description || 'No bio provided'}'
+
+Generate images that align with these analyzed preferences while introducing creative variations and related concepts to keep the feed engaging and fresh.`;
+                } catch(e) {
+                    console.error("Error analyzing prompt preferences:", e);
+                    // Fallback to simpler analysis
+                    const combinedPrompts = [...userPrompts, ...followedPrompts, ...likedPrompts];
+                    return `Based on ${userPrompts.length} personal projects, ${followedPrompts.length} followed user projects, and ${likedPrompts.length} liked items, the user shows interest in: ${[...new Set(combinedPrompts)].slice(0, 25).join(', ')}.`;
                 }
             }
 
+            return `User '@${currentUser.username}' (${currentUser.description || 'No bio'}) hasn't created, liked, or followed anyone with public projects yet. Generate visually stunning and diverse content across popular creative themes: digital art, fantasy landscapes, sci-fi scenes, abstract art, nature photography, architectural marvels, and surreal concepts.`;
+        }
+
+        async function fetchPrompts(currentUser, count) {
+            console.log('Fetching new personalized prompts...');
             try {
+                const userInterestSummary = await getUserInterests(currentUser);
+                
                 const completion = await websim.chat.completions.create({
                     messages: [{
                         role: 'system',
-                        content: `You are a creative prompt generator for an AI image model. Your goal is to create a personalized, engaging, and endless vertical social media feed.
-                        
-                        ${contextPrompt}
-                        
-                        Based on this information, generate ${count} unique and diverse prompts for visually stunning images.
-                        - Analyze the provided prompt history for recurring themes, subjects, and styles (e.g., "cyberpunk", "fantasy", "photorealistic", "abstract").
-                        - Generate new prompts that are similar to or remixes of the user's interests.
-                        - Also, introduce some related but new concepts to keep the feed fresh and interesting. For example, if they like "fantasy castles", suggest "enchanted forest villages" or "floating islands with wizard towers".
-                        - The prompts should be imaginative and detailed.
-                        
-                        Respond with a JSON object following this schema: { "prompts": ["prompt1", "prompt2", ...] }`,
+                        content: `You are a creative prompt generator that creates personalized visual content based on deep user analysis.
+
+${userInterestSummary}
+
+Generate ${count} unique image prompts that:
+1. Strongly reflect the user's established visual preferences and themes
+2. Introduce creative variations and evolution of their interests  
+3. Include some fresh but related concepts to expand their horizons
+4. Maintain high visual quality and engagement suitable for a social media feed
+5. Use specific artistic and technical language for optimal image generation
+
+Each prompt should be detailed enough to generate stunning, scroll-stopping visuals while staying true to the user's demonstrated preferences.
+
+Respond with JSON: { "prompts": ["detailed prompt 1", "detailed prompt 2", ...] }`
                     }, {
                         role: 'user',
-                        content: `Generate ${count} prompts.`,
+                        content: `Generate ${count} personalized image prompts based on the analysis above.`,
                     }],
                     json: true,
                 });
@@ -210,19 +282,20 @@
                 const result = JSON.parse(completion.content);
                 if (result.prompts && Array.isArray(result.prompts)) {
                     promptsQueue.push(...result.prompts);
-                    console.log(`Fetched ${result.prompts.length} new personalized prompts.`);
+                    console.log(`Fetched ${result.prompts.length} new personalized prompts based on user's creative history.`);
                 }
             } catch (error) {
-                console.error('Error fetching prompts:', error);
-                // Add some fallback prompts
+                console.error('Error fetching personalized prompts:', error);
+                // Enhanced fallback prompts with more variety
                 promptsQueue.push(
-                    "A neon-lit cyberpunk city street in the rain, with flying cars",
-                    "An enchanted forest with glowing mushrooms and ethereal spirits",
-                    "A majestic dragon flying over a volcanic landscape",
-                    "An astronaut discovering an ancient alien artifact on Mars",
-                    "A serene underwater city inhabited by merfolk",
-                    "A surrealist painting of a clock melting over a desert landscape",
-                    "A giant, crystalline tree in the center of a forgotten civilization"
+                    "A neon-lit cyberpunk city street in the rain, with flying cars and holographic advertisements",
+                    "An enchanted forest with glowing mushrooms, ethereal spirits, and mystical fog",
+                    "A majestic dragon soaring over a volcanic landscape at sunset",
+                    "An astronaut discovering ancient alien ruins on a distant crystalline planet",
+                    "A serene underwater city with bioluminescent architecture and swimming merfolk",
+                    "A surrealist dreamscape with floating islands and impossible geometry",
+                    "A steampunk airship floating through clouded mountain peaks",
+                    "An abstract digital art piece with flowing neon fractals and particle effects"
                 );
             }
         }
