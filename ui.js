@@ -79,8 +79,8 @@ export function updateFeedItem(item, prompt, imageUrl) {
                 // Reset state for recycled elements
                 promptInfo.classList.remove('expanded', 'expandable');
 
-                if (prompt.length > 256) {
-                    const truncatedText = prompt.substring(0, 256) + '...';
+                if (prompt.length > 512) {
+                    const truncatedText = prompt.substring(0, 512) + '...';
                     promptInfo.textContent = truncatedText;
                     promptInfo.dataset.truncatedText = truncatedText;
                     promptInfo.classList.add('expandable');
