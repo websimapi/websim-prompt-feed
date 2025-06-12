@@ -2,9 +2,12 @@ import { fetchNewPrompts, generateImage, fetchFollowingProjects } from './api.js
 import { createFeedItemElement, updateFeedItem, hideLoading, showLoading, showFinalError } from './ui.js';
 
 const feedContainer = document.getElementById('feed-container');
+const saveFeedToggle = document.getElementById('save-feed-toggle');
 
 const MIN_AHEAD_BUFFER = 7;
 const BATCH_SIZE = 10;
+const SAVED_FEED_KEY = 'infiniteFeedSavedData';
+const SAVE_TOGGLE_KEY = 'infiniteFeedSaveState';
 
 let isFetching = false;
 let itemsQueue = [];
@@ -12,6 +15,82 @@ let user = null;
 let followingCursor = null; // for pagination
 let hasMoreFollowedProjects = true; // to know if we should keep fetching
 let processedProjectIds = new Set(); // for preventing duplicates
+let isSavingFeed = false;
+
+function setupSaveToggle() {
+    if (localStorage.getItem(SAVE_TOGGLE_KEY) === 'true') {
+        isSavingFeed = true;
+        saveFeedToggle.classList.add('active');
+        saveFeedToggle.title = 'Stop saving feed';
+    } else {
+        isSavingFeed = false;
+        saveFeedToggle.classList.remove('active');
+        saveFeedToggle.title = 'Save feed to view later';
+    }
+
+    saveFeedToggle.addEventListener('click', () => {
+        isSavingFeed = !isSavingFeed;
+        localStorage.setItem(SAVE_TOGGLE_KEY, isSavingFeed);
+        
+        if (isSavingFeed) {
+            saveFeedToggle.classList.add('active');
+            saveFeedToggle.title = 'Stop saving feed';
+        } else {
+            saveFeedToggle.classList.remove('active');
+            saveFeedToggle.title = 'Save feed to view later';
+        }
+    });
+}
+
+function saveFeedItem(itemData) {
+    if (!isSavingFeed) return;
+    try {
+        const savedFeed = JSON.parse(localStorage.getItem(SAVED_FEED_KEY) || '[]');
+        savedFeed.push(itemData);
+        localStorage.setItem(SAVED_FEED_KEY, JSON.stringify(savedFeed));
+        console.log('Item saved to local storage.');
+    } catch(e) {
+        console.error("Error saving feed item:", e);
+    }
+}
+
+function loadSavedFeed() {
+    if (!isSavingFeed) return [];
+    try {
+        const savedFeed = JSON.parse(localStorage.getItem(SAVED_FEED_KEY) || '[]');
+        console.log(`Loaded ${savedFeed.length} items from local storage.`);
+        savedFeed.forEach(item => {
+            if (item.type === 'project' && item.projectData?.project?.id) {
+                processedProjectIds.add(item.projectData.project.id);
+            }
+        });
+        return savedFeed;
+    } catch (e) {
+        console.error("Error loading saved feed:", e);
+        localStorage.removeItem(SAVED_FEED_KEY);
+        return [];
+    }
+}
+
+function restoreSavedItem(itemData) {
+    if (itemData.type === 'generated') {
+        const { prompt, imageUrl, user: itemUser } = itemData;
+        const itemElement = createFeedItemElement(itemUser, null);
+        updateFeedItem(itemElement, prompt, imageUrl);
+    } else if (itemData.type === 'project') {
+        const { projectData, imageUrl } = itemData;
+        if (!projectData || !projectData.project || !projectData.site || !projectData.site.prompt) {
+            console.warn('Skipping corrupted saved project item.', itemData);
+            return;
+        }
+        const author = projectData.project.created_by;
+        const project = projectData.project;
+        const prompt = projectData.site.prompt.text;
+        
+        const itemElement = createFeedItemElement(author, project);
+        updateFeedItem(itemElement, prompt, imageUrl);
+    }
+}
 
 async function fetchAndQueueItems() {
     if (isFetching) return;
@@ -103,6 +182,9 @@ async function createAndAppendItem() {
         const itemElement = createFeedItemElement(user, null);
         const imageUrl = await generateImage(prompt);
         updateFeedItem(itemElement, prompt, imageUrl);
+        if (imageUrl) {
+            saveFeedItem({ type: 'generated', prompt, imageUrl, user });
+        }
     } else if (item.type === 'project') {
         const projectData = item.data;
         const author = projectData.project.created_by;
@@ -114,6 +196,9 @@ async function createAndAppendItem() {
         const imageUrl = await generateImage(prompt);
         
         updateFeedItem(itemElement, prompt, imageUrl);
+        if (imageUrl) {
+            saveFeedItem({ type: 'project', projectData, imageUrl });
+        }
     }
 }
 
@@ -139,33 +224,46 @@ async function handleScroll() {
 async function main() {
     try {
         user = await websim.getUser();
-        if (user) {
+    } catch (e) {
+        console.log("Could not get user, continuing as anonymous.");
+    }
+    
+    setupSaveToggle();
+    const savedItems = loadSavedFeed();
+
+    if (savedItems.length > 0) {
+        showLoading(`Loading your saved feed...`);
+        savedItems.forEach(itemData => restoreSavedItem(itemData));
+    } else {
+         if (user) {
             showLoading(`Building your personalized feed, @${user.username}...`);
         } else {
             showLoading('Building your feed...');
         }
-    } catch (e) {
-        console.log("Could not get user, continuing as anonymous.");
-        showLoading('Building your feed...');
     }
     
     await fetchAndQueueItems();
 
-    if (itemsQueue.length === 0) {
+    if (feedContainer.children.length === 0 && itemsQueue.length === 0) {
         showFinalError('Could not generate feed. Please try again later.');
         return;
     }
     
-    const initialItemsCount = Math.min(MIN_AHEAD_BUFFER, itemsQueue.length);
-    const initialPromises = [];
-    for (let i = 0; i < initialItemsCount; i++) {
-        initialPromises.push(createAndAppendItem());
+    if (savedItems.length === 0) {
+        const initialItemsCount = Math.min(MIN_AHEAD_BUFFER, itemsQueue.length);
+        const initialPromises = [];
+        for (let i = 0; i < initialItemsCount; i++) {
+            initialPromises.push(createAndAppendItem());
+        }
+        await Promise.all(initialPromises);
     }
-    await Promise.all(initialPromises);
     
     hideLoading();
 
     feedContainer.addEventListener('scroll', handleScroll, { passive: true });
+    
+    // Check if we need to pre-fill more items right away
+    handleScroll();
 }
 
 main();
