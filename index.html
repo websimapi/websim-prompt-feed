@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Infinite Scroll Feed</title>
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden; /* Hide body scrollbars */
+            background-color: #111;
+            color: white;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+        }
+
+        #feed-container {
+            width: 100vw;
+            height: 100vh;
+            overflow-y: scroll;
+            scroll-snap-type: y mandatory;
+        }
+
+        .feed-item {
+            width: 100%;
+            height: 100%;
+            scroll-snap-align: start;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            align-items: center;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            position: relative;
+            background-color: #222;
+            box-shadow: inset 0 0 100px 50px rgba(0,0,0,0.5); /* Vignette effect */
+        }
+
+        .feed-item .prompt-info {
+            background: rgba(0, 0, 0, 0.6);
+            padding: 10px 20px;
+            border-radius: 10px;
+            margin-bottom: 50px;
+            max-width: 80%;
+            text-align: center;
+            font-size: 1.2rem;
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: opacity 0.3s ease-in-out;
+        }
+
+        #loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            z-index: 1000;
+            font-size: 1.5rem;
+            transition: opacity 0.5s ease;
+        }
+        
+        #loading.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .spinner {
+            border: 8px solid #f3f3f3;
+            border-top: 8px solid #3498db;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div id="feed-container"></div>
+    <div id="loading">
+        <div class="spinner"></div>
+        <p>Generating your feed...</p>
+    </div>
+    <script type="module">
+        const feedContainer = document.getElementById('feed-container');
+        const loadingIndicator = document.getElementById('loading');
+
+        const INITIAL_BUFFER = 7;
+        const FETCH_THRESHOLD = 3;
+        const PROMPT_BATCH_SIZE = 10;
+
+        let isFetching = false;
+        let promptsQueue = [];
+        let user = null;
+
+        async function fetchPrompts(currentUser, count) {
+            console.log('Fetching new prompts...');
+            try {
+                const userDescription = currentUser ?
+                    `The user's username is '${currentUser.username}' and their description is '${currentUser.description}'.` :
+                    'The user is anonymous.';
+
+                const completion = await websim.chat.completions.create({
+                    messages: [{
+                        role: 'system',
+                        content: `You are a creative prompt generator for an AI image model. Generate a list of diverse and visually interesting prompts for a vertical social media feed.
+                        The prompts should be imaginative, ranging from fantasy landscapes to futuristic cityscapes, abstract art, and surreal concepts.
+                        ${userDescription}
+                        Generate ${count} unique prompts.
+                        Respond with a JSON object following this schema: { "prompts": ["prompt1", "prompt2", ...] }`,
+                    }, {
+                        role: 'user',
+                        content: `Generate ${count} prompts.`,
+                    }],
+                    json: true,
+                });
+
+                const result = JSON.parse(completion.content);
+                if (result.prompts && Array.isArray(result.prompts)) {
+                    promptsQueue.push(...result.prompts);
+                    console.log(`Fetched ${result.prompts.length} new prompts.`);
+                }
+            } catch (error) {
+                console.error('Error fetching prompts:', error);
+                // Add some fallback prompts
+                promptsQueue.push(
+                    "A neon-lit cyberpunk city street in the rain, with flying cars",
+                    "An enchanted forest with glowing mushrooms and ethereal spirits",
+                    "A majestic dragon flying over a volcanic landscape",
+                    "An astronaut discovering an ancient alien artifact on Mars",
+                    "A serene underwater city inhabited by merfolk",
+                    "A surrealist painting of a clock melting over a desert landscape",
+                    "A giant, crystalline tree in the center of a forgotten civilization"
+                );
+            }
+        }
+
+        async function addFeedItem() {
+            if (promptsQueue.length === 0) {
+                console.log('Prompt queue is empty, fetching more...');
+                await fetchPrompts(user, PROMPT_BATCH_SIZE);
+                if (promptsQueue.length === 0) {
+                    console.error("Failed to add new item, no prompts available.");
+                    return;
+                }
+            }
+
+            const prompt = promptsQueue.shift();
+            if (!prompt) return;
+
+            const item = document.createElement('div');
+            item.className = 'feed-item';
+            const promptInfo = document.createElement('div');
+            promptInfo.className = 'prompt-info';
+            promptInfo.textContent = 'Generating...';
+            item.appendChild(promptInfo);
+            feedContainer.appendChild(item);
+
+            try {
+                console.log(`Generating image for prompt: "${prompt}"`);
+                const result = await websim.imageGen({
+                    prompt: `${prompt}, vertical aspect ratio, cinematic lighting, hyperdetailed, photorealistic`,
+                    aspect_ratio: '9:16'
+                });
+
+                const img = new Image();
+                img.onload = () => {
+                    item.style.backgroundImage = `url(${result.url})`;
+                    promptInfo.textContent = prompt;
+                };
+                img.src = result.url;
+
+            } catch (error) {
+                console.error('Error generating image:', error);
+                item.style.backgroundColor = '#333';
+                promptInfo.textContent = `Error: Could not load image for "${prompt}"`;
+            }
+        }
+
+        async function handleScroll() {
+            if (isFetching) return;
+
+            const totalItems = feedContainer.children.length;
+            const currentItemIndex = Math.round(feedContainer.scrollTop / window.innerHeight);
+
+            if (totalItems - currentItemIndex <= FETCH_THRESHOLD) {
+                isFetching = true;
+                console.log('Reached threshold, fetching next item.');
+                
+                try {
+                    await addFeedItem();
+                    if (promptsQueue.length < PROMPT_BATCH_SIZE / 2) {
+                        fetchPrompts(user, PROMPT_BATCH_SIZE); 
+                    }
+                } catch (e) {
+                    console.error("Failed to add new item on scroll", e);
+                } finally {
+                    isFetching = false;
+                }
+            }
+        }
+
+        async function main() {
+            try {
+                user = await websim.getUser();
+            } catch (e) {
+                console.log("Could not get user, continuing as anonymous.");
+            }
+            
+            await fetchPrompts(user, PROMPT_BATCH_SIZE * 2);
+
+            if (promptsQueue.length === 0) {
+              loadingIndicator.querySelector('p').textContent = 'Could not generate feed. Please try again later.';
+              loadingIndicator.querySelector('.spinner').style.display = 'none';
+              return;
+            }
+            
+            loadingIndicator.classList.add('hidden');
+
+            const itemsToCreate = Math.min(INITIAL_BUFFER, promptsQueue.length);
+            for (let i = 0; i < itemsToCreate; i++) {
+               addFeedItem();
+            }
+
+            feedContainer.addEventListener('scroll', handleScroll);
+        }
+
+        main();
+    </script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"4c6229722a6346bc8eb5cb0e5eae5d41","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+</body>
+</html>
+
