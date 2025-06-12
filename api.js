@@ -5,7 +5,7 @@ async function getUserInterests(currentUser) {
 
     // 1. User's own projects
     try {
-        const userProjectsResponse = await fetch(`/api/v1/users/${currentUser.username}/projects?first=10&posted=true&sort_by=updated_at`);
+        const userProjectsResponse = await fetch(`/api/v1/users/${currentUser.username}/projects?first=30&posted=true&sort_by=updated_at`);
         if (userProjectsResponse.ok) {
             const userProjects = await userProjectsResponse.json();
             userProjects.projects.data.forEach(p => {
@@ -21,7 +21,7 @@ async function getUserInterests(currentUser) {
 
     // 2. Projects from followed users
     try {
-        const followingResponse = await fetch(`/api/v1/users/${currentUser.username}/following?first=5`);
+        const followingResponse = await fetch(`/api/v1/users/${currentUser.username}/following?first=15`);
         if (followingResponse.ok) {
             const followingData = await followingResponse.json();
             const followedUsers = followingData.following.data.map(f => f.follow.user);
@@ -47,7 +47,7 @@ async function getUserInterests(currentUser) {
 
     // 3. User's liked projects
     try {
-        const likedResponse = await fetch(`/api/v1/users/${currentUser.username}/likes?first=10`);
+        const likedResponse = await fetch(`/api/v1/users/${currentUser.username}/likes?first=30`);
         if (likedResponse.ok) {
             const likedData = await likedResponse.json();
             likedData.likes.data.forEach(l => {
@@ -123,24 +123,25 @@ export async function fetchNewPrompts(currentUser, count) {
     }
 }
 
-export async function fetchFollowingProjects(currentUser, count) {
-    if (!currentUser) return [];
+export async function fetchFollowingProjects(currentUser, count, afterCursor = null) {
+    if (!currentUser) return { projects: [], meta: null };
     try {
         console.log(`Fetching projects from users followed by @${currentUser.username}...`);
-        const response = await fetch(`/api/v1/users/${currentUser.username}/following/projects?first=${count}&posted=true&sort_by=updated_at`);
+        const url = `/api/v1/users/${currentUser.username}/following/projects?first=${count}&posted=true&sort_by=updated_at${afterCursor ? `&after=${afterCursor}` : ''}`;
+        const response = await fetch(url);
         if (!response.ok) {
             console.error(`Failed to fetch following projects: ${response.status} ${response.statusText}`);
-            return [];
+            return { projects: [], meta: null };
         }
         const data = await response.json();
         if (data.projects && data.projects.data) {
             console.log(`Fetched ${data.projects.data.length} projects from followed users.`);
-            return data.projects.data;
+            return { projects: data.projects.data, meta: data.projects.meta };
         }
-        return [];
+        return { projects: [], meta: null };
     } catch (error) {
         console.error('Error fetching following projects:', error);
-        return [];
+        return { projects: [], meta: null };
     }
 }
 

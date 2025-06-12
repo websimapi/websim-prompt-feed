@@ -9,6 +9,9 @@ const BATCH_SIZE = 10;
 let isFetching = false;
 let itemsQueue = [];
 let user = null;
+let followingCursor = null; // for pagination
+let hasMoreFollowedProjects = true; // to know if we should keep fetching
+let processedProjectIds = new Set(); // for preventing duplicates
 
 async function fetchAndQueueItems() {
     if (isFetching) return;
@@ -16,23 +19,55 @@ async function fetchAndQueueItems() {
     console.log('Fetching new items...');
 
     try {
-        const promises = [fetchNewPrompts(user, BATCH_SIZE)];
-        if (user) {
-            promises.push(fetchFollowingProjects(user, BATCH_SIZE));
+        const promises = [];
+        // Always fetch new prompts from AI
+        promises.push(fetchNewPrompts(user, BATCH_SIZE));
+        
+        // Only fetch followed projects if user is logged in AND we believe there are more to fetch
+        if (user && hasMoreFollowedProjects) {
+            promises.push(fetchFollowingProjects(user, BATCH_SIZE, followingCursor));
         }
 
         const results = await Promise.all(promises);
         const prompts = results[0] || [];
-        const followedProjects = (user && results[1]) ? results[1] : [];
+        
+        const followedResult = (user && hasMoreFollowedProjects) ? results[1] : null;
+        let followedProjects = [];
+
+        if (followedResult) {
+            followedProjects = followedResult.projects || [];
+            if (followedResult.meta) {
+                followingCursor = followedResult.meta.end_cursor;
+                hasMoreFollowedProjects = followedResult.meta.has_next_page;
+            } else {
+                hasMoreFollowedProjects = false;
+            }
+        }
         
         const newItems = [];
         newItems.push(...prompts.map(p => ({ type: 'generated', data: p })));
         
-        const validProjects = followedProjects.filter(p => p.site && p.site.prompt && p.site.prompt.text);
-        newItems.push(...validProjects.map(p => ({ type: 'project', data: p })));
+        // Filter out duplicates and invalid projects
+        const newFollowedProjects = followedProjects.filter(p => {
+            const isValid = p.project && p.site && p.site.prompt && p.site.prompt.text;
+            if (!isValid) return false;
+            if (processedProjectIds.has(p.project.id)) {
+                console.log(`Skipping duplicate project: ${p.project.title || p.project.id}`);
+                return false;
+            }
+            return true;
+        });
+
+        // Add new project IDs to the set
+        newFollowedProjects.forEach(p => processedProjectIds.add(p.project.id));
+        
+        newItems.push(...newFollowedProjects.map(p => ({ type: 'project', data: p })));
 
         if (newItems.length === 0) {
             console.log("No new items fetched.");
+             if (user && !hasMoreFollowedProjects) {
+                console.log("No more projects from followed users.");
+            }
             return;
         }
         
