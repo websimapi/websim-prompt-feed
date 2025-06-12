@@ -23,6 +23,25 @@ export function createFeedItemElement(user, project) {
     const promptInfo = document.createElement('div');
     promptInfo.className = 'prompt-info';
     promptInfo.textContent = 'Generating...';
+    
+    promptInfo.addEventListener('click', (e) => {
+        if (promptInfo.classList.contains('expandable')) {
+            // Prevent link navigation if item is a project and we're clicking the expandable text
+            e.preventDefault();
+            e.stopPropagation();
+
+            if (promptInfo.classList.contains('expanded')) {
+                // Collapse
+                promptInfo.textContent = promptInfo.dataset.truncatedText;
+                promptInfo.classList.remove('expanded');
+            } else {
+                // Expand
+                promptInfo.textContent = promptInfo.dataset.fullText;
+                promptInfo.classList.add('expanded');
+            }
+        }
+    });
+
     itemContent.appendChild(promptInfo);
     
     if (user) {
@@ -55,12 +74,30 @@ export function updateFeedItem(item, prompt, imageUrl) {
         const img = new Image();
         img.onload = () => {
             item.style.backgroundImage = `url(${imageUrl})`;
-            if (promptInfo) promptInfo.textContent = prompt;
+            if (promptInfo && prompt) {
+                promptInfo.dataset.fullText = prompt;
+                // Reset state for recycled elements
+                promptInfo.classList.remove('expanded', 'expandable');
+
+                if (prompt.length > 256) {
+                    const truncatedText = prompt.substring(0, 256) + '...';
+                    promptInfo.textContent = truncatedText;
+                    promptInfo.dataset.truncatedText = truncatedText;
+                    promptInfo.classList.add('expandable');
+                } else {
+                    promptInfo.textContent = prompt;
+                }
+            } else if (promptInfo) {
+                promptInfo.textContent = ''; // Hide if no prompt
+            }
         };
         img.src = imageUrl;
     } else {
         item.style.backgroundColor = '#333';
-        if (promptInfo) promptInfo.textContent = `Error: Could not load image for "${prompt}"`;
+        if (promptInfo) {
+            promptInfo.textContent = `Error: Could not load image for "${prompt || ''}"`;
+            promptInfo.classList.remove('expanded', 'expandable');
+        }
     }
 }
 

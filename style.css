@@ -49,7 +49,11 @@ html, body {
     backdrop-filter: blur(5px);
     -webkit-backdrop-filter: blur(5px);
     border: 1px solid rgba(255, 255, 255, 0.1);
-    transition: opacity 0.3s ease-in-out;
+    transition: all 0.3s ease-in-out;
+}
+
+.prompt-info.expandable {
+    cursor: pointer;
 }
 
 .feed-item-content .user-info {
