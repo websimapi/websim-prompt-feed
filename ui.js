@@ -1,9 +1,12 @@
 const feedContainer = document.getElementById('feed-container');
 const loadingIndicator = document.getElementById('loading');
 
-export function createFeedItemElement(user, project, parentContainer = feedContainer) {
+export function createFeedItemElement(itemData, parentContainer = feedContainer) {
+    const { id, prompt, imageUrl, project, user } = itemData;
+
     const itemContent = document.createElement('div');
     itemContent.className = 'feed-item-content';
+    itemContent.dataset.itemData = JSON.stringify(itemData);
 
     let containerElement;
 
@@ -44,24 +47,56 @@ export function createFeedItemElement(user, project, parentContainer = feedConta
 
     itemContent.appendChild(promptInfo);
     
-    if (user) {
+    const author = project ? project.created_by : user;
+
+    if (author) {
         const userInfo = document.createElement('div');
         userInfo.className = 'user-info';
         
         const userProfileLink = document.createElement('a');
-        userProfileLink.href = `https://websim.com/@${user.username}`;
+        userProfileLink.href = `https://websim.com/@${author.username}`;
         userProfileLink.target = '_blank';
         userProfileLink.className = 'user-profile-link';
 
         const userAvatar = document.createElement('img');
-        userAvatar.src = user.avatar_url || `https://images.websim.com/avatar/${user.username}`;
+        userAvatar.src = author.avatar_url || `https://images.websim.com/avatar/${author.username}`;
         const userName = document.createElement('span');
-        userName.textContent = `@${user.username}`;
+        userName.textContent = `@${author.username}`;
         
         userProfileLink.appendChild(userAvatar);
         userProfileLink.appendChild(userName);
         userInfo.appendChild(userProfileLink);
         itemContent.appendChild(userInfo);
+    }
+    
+    // Add spectator container now so it's always there
+    const spectatorIndicators = document.createElement('div');
+    spectatorIndicators.className = 'spectator-indicators';
+    itemContent.appendChild(spectatorIndicators);
+    
+    if (imageUrl) {
+        const img = new Image();
+        img.onload = () => {
+            itemContent.style.backgroundImage = `url(${imageUrl})`;
+        };
+        img.onerror = () => {
+            itemContent.style.backgroundColor = '#333';
+            promptInfo.textContent = `Error: Could not load image for "${prompt || ''}"`;
+        }
+        img.src = imageUrl;
+
+        promptInfo.dataset.fullText = prompt;
+        if (prompt.length > 512) {
+            const truncatedText = prompt.substring(0, 512) + '...';
+            promptInfo.textContent = truncatedText;
+            promptInfo.dataset.truncatedText = truncatedText;
+            promptInfo.classList.add('expandable');
+        } else {
+            promptInfo.textContent = prompt;
+        }
+    } else {
+        itemContent.style.backgroundColor = '#333';
+        promptInfo.textContent = `Error: Could not load image for "${prompt || ''}"`;
     }
 
     parentContainer.appendChild(containerElement);
@@ -120,4 +155,29 @@ export function showFinalError(message) {
     if (p) p.textContent = message;
     if (spinner) spinner.style.display = 'none';
     loadingIndicator.classList.remove('hidden');
+}
+
+export function renderSpectatorIndicators(itemContentElement, spectators) {
+    let indicatorsContainer = itemContentElement.querySelector('.spectator-indicators');
+    if (!indicatorsContainer) return; // Should exist, but safety first
+    
+    indicatorsContainer.innerHTML = ''; // Clear old indicators
+
+    if (!spectators || Object.keys(spectators).length === 0) return;
+
+    Object.values(spectators).forEach(spectator => {
+        const badge = document.createElement('div');
+        badge.className = 'spectator-badge';
+        
+        const avatar = document.createElement('img');
+        avatar.src = spectator.avatarUrl || `https://images.websim.com/avatar/${spectator.username}`;
+        avatar.title = `@${spectator.username} is watching`;
+
+        const name = document.createElement('span');
+        name.textContent = `@${spectator.username}`;
+        
+        badge.appendChild(avatar);
+        badge.appendChild(name);
+        indicatorsContainer.appendChild(badge);
+    });
 }
