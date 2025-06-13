@@ -7,7 +7,7 @@ html, body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
 }
 
-#feed-container {
+#feed-container, #liked-feed-container {
     width: 100vw;
     height: 100vh;
     overflow-y: scroll;
@@ -93,6 +93,40 @@ html, body {
     font-weight: bold;
 }
 
+.like-button {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 100;
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transition: all 0.2s ease-in-out;
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+}
+
+.like-button:hover {
+    transform: scale(1.1);
+    background: rgba(0, 0, 0, 0.7);
+}
+
+.like-button svg {
+    color: white;
+    transition: all 0.2s ease-in-out;
+}
+
+.like-button.liked svg {
+    fill: #ff4d4d;
+    stroke: #ff4d4d;
+}
+
 #loading {
     position: fixed;
     top: 0;
@@ -107,6 +141,10 @@ html, body {
     z-index: 1000;
     font-size: 1.5rem;
     transition: opacity 0.5s ease;
+}
+
+.hidden {
+    display: none !important;
 }
 
 #loading.hidden {

@@ -1,7 +1,7 @@
 const feedContainer = document.getElementById('feed-container');
 const loadingIndicator = document.getElementById('loading');
 
-export function createFeedItemElement(user, project) {
+export function createFeedItemElement(user, project, parentContainer = feedContainer) {
     const itemContent = document.createElement('div');
     itemContent.className = 'feed-item-content';
 
@@ -64,11 +64,14 @@ export function createFeedItemElement(user, project) {
         itemContent.appendChild(userInfo);
     }
 
-    feedContainer.appendChild(containerElement);
+    parentContainer.appendChild(containerElement);
     return itemContent;
 }
 
-export function updateFeedItem(item, prompt, imageUrl) {
+export function updateFeedItem(item, prompt, imageUrl, itemData = null) {
+    if (itemData) {
+        item.dataset.itemData = JSON.stringify(itemData);
+    }
     const promptInfo = item.querySelector('.prompt-info');
     if (imageUrl) {
         const img = new Image();
