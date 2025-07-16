@@ -84,41 +84,49 @@ async function getUserInterests(currentUser) {
 }
 
 export async function fetchNewPrompts(currentUser, count) {
-    console.log('Fetching new personalized prompts...');
+    console.log('Fetching new personalized ad prompts...');
     try {
         const userInterestSummary = await getUserInterests(currentUser);
         
         const completion = await websim.chat.completions.create({
             messages: [{
                 role: 'system',
-                content: `You are a creative prompt generator for an AI image model. Your goal is to create a personalized, engaging, and endless vertical social media feed for a user.
+                content: `You are a chaotic advertising prompt generator creating OVER-THE-TOP, FLASHY, COMMERCIAL advertising visuals. Your goal is to create prompts that feel like out-of-control ads - think flashy infomercials, aggressive marketing, clickbait thumbnails, and absurd product advertisements.
                 ${userInterestSummary}
-                Based on this, generate ${count} unique and diverse prompts for visually stunning images. The prompts should be imaginative, ranging from fantasy landscapes to futuristic cityscapes, abstract art, and surreal concepts, while being tailored to the user's inferred interests. Also, introduce some related but new concepts to keep the feed fresh.
+                Based on this, generate ${count} unique and diverse advertising-style prompts that are:
+                - LOUD and attention-grabbing with excessive use of superlatives
+                - Include fake product advertisements, miracle cures, get-rich-quick schemes
+                - Feature bright neon colors, explosion effects, before/after comparisons
+                - Use advertising buzzwords like "AMAZING!", "LIMITED TIME!", "DOCTORS HATE THIS!"
+                - Include fictional products, services, or lifestyle promises
+                - Feel like spam emails, popup ads, or late-night TV commercials
+                - Are completely over-the-top and absurd
+                Examples: "SHOCKING! This ONE WEIRD TRICK will make you RICH! Neon explosions, dollar signs flying everywhere, before/after photos, urgent red text everywhere" or "DOCTORS HATE HIM! Local man discovers ANCIENT SECRET to perfect teeth! Dramatic before/after, medical imagery, bright dental advertising aesthetic"
                 Respond with a JSON object following this schema: { "prompts": ["prompt1", "prompt2", ...] }`,
             }, {
                 role: 'user',
-                content: `Generate ${count} prompts.`,
+                content: `Generate ${count} outrageous advertising prompts.`,
             }],
             json: true,
         });
 
         const result = JSON.parse(completion.content);
         if (result.prompts && Array.isArray(result.prompts)) {
-            console.log(`Fetched ${result.prompts.length} new personalized prompts.`);
+            console.log(`Fetched ${result.prompts.length} new personalized ad prompts.`);
             return result.prompts;
         }
         return [];
     } catch (error) {
-        console.error('Error fetching prompts:', error);
-        // Add some fallback prompts
+        console.error('Error fetching ad prompts:', error);
+        // Add some fallback ad prompts
         return [
-            "A neon-lit cyberpunk city street in the rain, with flying cars",
-            "An enchanted forest with glowing mushrooms and ethereal spirits",
-            "A majestic dragon flying over a volcanic landscape",
-            "An astronaut discovering an ancient alien artifact on Mars",
-            "A serene underwater city inhabited by merfolk",
-            "A surrealist painting of a clock melting over a desert landscape",
-            "A giant, crystalline tree in the center of a forgotten civilization"
+            "SHOCKING! This ONE WEIRD TRICK will make you RICH! Neon explosions, dollar signs flying everywhere, before/after photos, urgent red text everywhere",
+            "DOCTORS HATE HIM! Local man discovers ANCIENT SECRET to perfect teeth! Dramatic before/after, medical imagery, bright dental advertising aesthetic",
+            "AMAZING! Lose 50 pounds in 5 days with this MIRACLE PILL! Before/after photos, explosive weight loss imagery, medical claims, bright colors",
+            "LIMITED TIME OFFER! Buy this REVOLUTIONARY gadget and change your life FOREVER! Product showcase, explosion effects, urgent timers",
+            "SCIENTISTS SHOCKED! This simple kitchen ingredient REVERSES AGING! Anti-aging advertisement, laboratory imagery, fountain of youth visuals",
+            "URGENT! Government doesn't want you to know this INVESTMENT SECRET! Money flying, charts going up, financial freedom imagery",
+            "BREAKTHROUGH! This app makes you FLUENT in any language in 24 hours! Brain imagery, language flags, before/after learning results"
         ];
     }
 }
@@ -147,14 +155,14 @@ export async function fetchFollowingProjects(currentUser, count, afterCursor = n
 
 export async function generateImage(prompt) {
     try {
-        console.log(`Generating image for prompt: "${prompt}"`);
+        console.log(`Generating advertisement image for prompt: "${prompt}"`);
         const result = await websim.imageGen({
-            prompt: `${prompt}, vertical aspect ratio, cinematic lighting, hyperdetailed, photorealistic`,
+            prompt: `${prompt}, advertising style, commercial photography, marketing poster, flashy colors, promotional material, advertisement layout, bold text overlay, marketing campaign, vertical aspect ratio`,
             aspect_ratio: '9:16'
         });
         return result.url;
     } catch (error) {
-        console.error('Error generating image:', error);
+        console.error('Error generating advertisement image:', error);
         return null;
     }
 }
