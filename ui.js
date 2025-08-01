@@ -1,13 +1,38 @@
 const feedContainer = document.getElementById('feed-container');
 const loadingIndicator = document.getElementById('loading');
 
-export function createFeedItemElement(user, project, parentContainer = feedContainer) {
+export function createFeedItemElement(user, project, itemType = 'default', itemData = {}) {
     const itemContent = document.createElement('div');
     itemContent.className = 'feed-item-content';
 
     let containerElement;
 
-    if (project) {
+    if (itemType === 'ad') {
+        containerElement = document.createElement('div');
+        containerElement.className = 'feed-item feed-item-ad';
+        containerElement.appendChild(itemContent);
+        
+        containerElement.addEventListener('click', () => {
+             try {
+                window.websim.postComment({
+                    content: `I clicked the ad! "${itemData.slogan}"`,
+                    credits: itemData.price
+                });
+                // Optimistically update UI
+                const promptInfo = containerElement.querySelector('.prompt-info');
+                if (promptInfo) {
+                    promptInfo.textContent = `Tipped ${itemData.price} credits! Thanks!`;
+                    containerElement.style.pointerEvents = 'none'; // Prevent re-clicking
+                }
+            } catch (e) {
+                console.error("Failed to post tip comment", e);
+                const promptInfo = containerElement.querySelector('.prompt-info');
+                 if (promptInfo) {
+                    promptInfo.textContent = `Could not tip. Are you logged in?`;
+                }
+            }
+        });
+    } else if (project) {
         const linkWrapper = document.createElement('a');
         linkWrapper.href = `https://websim.com/p/${project.id}`;
         linkWrapper.target = '_blank';
@@ -64,49 +89,52 @@ export function createFeedItemElement(user, project, parentContainer = feedConta
         itemContent.appendChild(userInfo);
     }
 
-    parentContainer.appendChild(containerElement);
+    feedContainer.appendChild(containerElement);
     return itemContent;
 }
 
-export function updateFeedItem(item, prompt, imageUrl, itemData = null) {
-    if (itemData) {
-        item.dataset.itemData = JSON.stringify(itemData);
-    }
+export function updateFeedItem(item, itemData, imageUrl, itemType = 'default') {
     const promptInfo = item.querySelector('.prompt-info');
+
     if (imageUrl) {
         const img = new Image();
         img.onload = () => {
             item.style.backgroundImage = `url(${imageUrl})`;
-            if (promptInfo && prompt) {
-                promptInfo.dataset.fullText = prompt;
-                // Reset state for recycled elements
-                promptInfo.classList.remove('expanded', 'expandable');
-
-                if (prompt.length > 512) {
-                    const truncatedText = prompt.substring(0, 512) + '...';
-                    promptInfo.textContent = truncatedText;
-                    promptInfo.dataset.truncatedText = truncatedText;
-                    promptInfo.classList.add('expandable');
+            if (promptInfo) {
+                if (itemType === 'ad') {
+                    promptInfo.textContent = `${itemData.slogan} (Tip ${itemData.price} credits!)`;
+                    promptInfo.classList.add('ad-info');
                 } else {
-                    promptInfo.textContent = prompt;
+                    const prompt = itemData.prompt;
+                    promptInfo.dataset.fullText = prompt;
+                    // Reset state for recycled elements
+                    promptInfo.classList.remove('expanded', 'expandable');
+
+                    if (prompt.length > 512) {
+                        const truncatedText = prompt.substring(0, 512) + '...';
+                        promptInfo.textContent = truncatedText;
+                        promptInfo.dataset.truncatedText = truncatedText;
+                        promptInfo.classList.add('expandable');
+                    } else {
+                        promptInfo.textContent = prompt;
+                    }
                 }
-            } else if (promptInfo) {
-                promptInfo.textContent = ''; // Hide if no prompt
             }
         };
         img.src = imageUrl;
     } else {
         item.style.backgroundColor = '#333';
         if (promptInfo) {
-            promptInfo.textContent = `Error: Could not load image for "${prompt || ''}"`;
-            promptInfo.classList.remove('expanded', 'expandable');
+            const text = itemType === 'ad' ? itemData.slogan : itemData.prompt;
+            promptInfo.textContent = `Error: Could not load image for "${text || ''}"`;
+            promptInfo.classList.remove('expanded', 'expandable', 'ad-info');
         }
     }
 }
 
 export function showLoading(message) {
     const p = loadingIndicator.querySelector('p');
-    if (p) p.textContent = message.replace('feed', 'AD FEED').replace('personalized', 'TARGETED ADS');
+    if (p) p.textContent = message;
     loadingIndicator.classList.remove('hidden');
 }
 

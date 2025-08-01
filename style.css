@@ -7,7 +7,7 @@ html, body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
 }
 
-#feed-container, #liked-feed-container {
+#feed-container {
     width: 100vw;
     height: 100vh;
     overflow-y: scroll;
@@ -38,8 +38,19 @@ html, body {
     box-shadow: inset 0 0 100px 50px rgba(0,0,0,0.5); /* Vignette effect */
 }
 
+.feed-item.feed-item-ad .feed-item-content {
+    border: 3px solid gold;
+    box-sizing: border-box;
+    cursor: pointer;
+    transition: transform 0.2s ease-in-out;
+}
+
+.feed-item.feed-item-ad:hover .feed-item-content {
+    transform: scale(1.01);
+}
+
 .feed-item-content .prompt-info {
-    background: rgba(255, 20, 20, 0.8);
+    background: rgba(0, 0, 0, 0.6);
     padding: 10px 20px;
     border-radius: 10px;
     margin-bottom: 50px;
@@ -48,11 +59,26 @@ html, body {
     font-size: 1.2rem;
     backdrop-filter: blur(5px);
     -webkit-backdrop-filter: blur(5px);
-    border: 2px solid rgba(255, 255, 0, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     transition: all 0.3s ease-in-out;
+}
+
+.prompt-info.ad-info {
+    border-color: gold;
+    position: relative;
+    padding-top: 30px;
+}
+
+.ad-info::before {
+    content: 'SPONSORED';
+    position: absolute;
+    top: 5px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.7em;
     font-weight: bold;
-    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
-    box-shadow: 0 0 20px rgba(255, 20, 20, 0.5);
+    color: gold;
+    letter-spacing: 1px;
 }
 
 .prompt-info.expandable {
@@ -96,40 +122,6 @@ html, body {
     font-weight: bold;
 }
 
-.like-button {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    z-index: 100;
-    background: rgba(0, 0, 0, 0.5);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 50%;
-    width: 50px;
-    height: 50px;
-    cursor: pointer;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    transition: all 0.2s ease-in-out;
-    backdrop-filter: blur(5px);
-    -webkit-backdrop-filter: blur(5px);
-}
-
-.like-button:hover {
-    transform: scale(1.1);
-    background: rgba(0, 0, 0, 0.7);
-}
-
-.like-button svg {
-    color: white;
-    transition: all 0.2s ease-in-out;
-}
-
-.like-button.liked svg {
-    fill: #ff4d4d;
-    stroke: #ff4d4d;
-}
-
 #loading {
     position: fixed;
     top: 0;
@@ -144,10 +136,6 @@ html, body {
     z-index: 1000;
     font-size: 1.5rem;
     transition: opacity 0.5s ease;
-}
-
-.hidden {
-    display: none !important;
 }
 
 #loading.hidden {
